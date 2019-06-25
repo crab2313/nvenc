@@ -16,7 +16,6 @@ pub enum DeviceType {
 
 pub struct Session {
     api: Api,
-    session: NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS,
     encoder: *mut c_void,
 }
 
@@ -36,7 +35,7 @@ impl Session {
         let status = unsafe { api.fptr.nvEncOpenEncodeSessionEx?(&mut session, &mut encoder) };
 
         if status == _NVENCSTATUS::NV_ENC_SUCCESS {
-            Some(Self { session: session, api: api, encoder: encoder})
+            Some(Self { api: api, encoder: encoder})
         } else { None }
     }
 
@@ -46,11 +45,17 @@ impl Session {
 
         if status != _NVENCSTATUS::NV_ENC_SUCCESS { return None; }
 
-        let guids = Vec::with_capacity(count as usize);
+        let mut guids = Vec::with_capacity(count as usize);
         let mut returned = 0;
         let status = unsafe { self.api.fptr.nvEncGetEncodeGUIDs?(self.encoder,
                 guids.as_mut_ptr(), count, &mut returned) };
 
+        if status != _NVENCSTATUS::NV_ENC_SUCCESS { return None; }
+
+        unsafe { guids.set_len(returned as usize) };
+
+        println!("{:?} {}", guids, returned
+        );
         for g in guids.into_iter().take(returned as usize) {
             if guid == g { return Some(true) }
         }
@@ -97,9 +102,60 @@ pub fn max_version_supported() -> Option<Version> {
 #[cfg(test)]
 mod tests {
     use crate::*;
-    #[test]
+    use ::cuda::ffi::cuda;
+
+    fn init_cuda_context() -> cuda::CUcontext {
+        unsafe {
+            let ret = cuda::cuInit(0);
+            assert_eq!(ret, cuda::CUDA_SUCCESS);
+            let mut count: i32 = 0;
+            let ret = cuda::cuDeviceGetCount(&mut count as *mut i32);
+            assert_eq!(ret, cuda::CUDA_SUCCESS);
+
+            println!("found {} cuda capable devices", count);
+
+            let mut device: cuda::CUdevice = uninitialized();
+
+            let ret = cuda::cuDeviceGet(&mut device, 0);
+            assert_eq!(ret, cuda::CUDA_SUCCESS);
+
+            let v = Vec::<u8>::with_capacity(30);
+            let cs = std::ffi::CString::from_vec_unchecked(v);
+
+            let c_raw = cs.into_raw();
+            let ret = cuda::cuDeviceGetName(c_raw, 30, device);
+            let cs = std::ffi::CString::from_raw(c_raw);
+            assert_eq!(ret, cuda::CUDA_SUCCESS);
+
+            println!("device name: {:?}", cs);
+
+            let mut context: cuda::CUcontext = uninitialized();
+
+            let ret = cuda::cuCtxCreate_v2(&mut context, 0, device);
+            assert_eq!(ret, cuda::CUDA_SUCCESS);
+            context
+        }
+    }
+
+    // #[test]
     fn session_create() {
-        assert!(Session::new(DeviceType::Cuda, std::ptr::null_mut()).is_some())
+        let context = init_cuda_context();
+        assert!(Session::new(DeviceType::Cuda, context as *mut c_void).is_some())
+    }
+
+    #[test]
+    fn h264() {
+        let h264_guid = GUID {
+            Data1: 0x6bc82762,
+            Data2: 0x4e63,
+            Data3: 0x4ca4,
+            Data4: [ 0xaa, 0x85, 0x1e, 0x50, 0xf3, 0x21, 0xf6, 0xbf]
+        };
+        let context = init_cuda_context();
+        let session = Session::new(DeviceType::Cuda, context as *mut c_void).unwrap();
+        let supported = session.support(h264_guid);
+        assert!(supported.is_some());
+        assert!(supported.unwrap())
     }
 
     #[test]
