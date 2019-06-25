@@ -1,0 +1,8 @@
+[package]
+name = "nvenc"
+version = "0.1.0"
+authors = ["Qiu Wenbo <qiuwenbo@kylinos.com.cn>"]
+edition = "2018"
+
+[dependencies]
+nvenc-sys = { git = "https://github.com/crab2313/nvenc-sys.git" }
