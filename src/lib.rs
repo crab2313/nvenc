@@ -2,18 +2,25 @@
 
 use nvenc_sys::*;
 use std::ffi::c_void;
-use std::mem::uninitialized;
+use std::mem::{uninitialized, zeroed};
 
 /// Device type used by NVDIA Video Codec SDK
+#[repr(u32)]
 pub enum DeviceType {
     /// Cuda
-    Cuda = _NV_ENC_DEVICE_TYPE::NV_ENC_DEVICE_TYPE_CUDA as isize,
+    Cuda = _NV_ENC_DEVICE_TYPE::NV_ENC_DEVICE_TYPE_CUDA,
     /// DirectX
-    DirectX = _NV_ENC_DEVICE_TYPE::NV_ENC_DEVICE_TYPE_DIRECTX as isize,
+    DirectX = _NV_ENC_DEVICE_TYPE::NV_ENC_DEVICE_TYPE_DIRECTX,
     /// OpenGL (Only usable on linux)
-    OpenGL = _NV_ENC_DEVICE_TYPE::NV_ENC_DEVICE_TYPE_OPENGL as isize,
+    OpenGL = _NV_ENC_DEVICE_TYPE::NV_ENC_DEVICE_TYPE_OPENGL,
 }
 
+/// Data format of input and output buffer
+#[repr(u32)]
+pub enum BufferFormat {
+    ARGB = _NV_ENC_BUFFER_FORMAT::NV_ENC_BUFFER_FORMAT_ARGB,
+    ABGR = _NV_ENC_BUFFER_FORMAT::NV_ENC_BUFFER_FORMAT_ABGR,
+}
 
 /// Encoder session object
 pub struct Session {
@@ -84,6 +91,68 @@ impl Session {
         if status != _NVENCSTATUS::NV_ENC_SUCCESS { return Some(false) }
         else { Some(true) }
     }
+
+    /// Allocate a new buffer managed by NVIDIA Video SDK
+    pub fn alloc_buffer(&self, width: u32, height: u32, format: BufferFormat) -> Option<InputBuffer> {
+        let mut params: NV_ENC_CREATE_INPUT_BUFFER = unsafe { zeroed() };
+        params.version = NV_ENC_CREATE_INPUT_BUFFER_VER;
+        params.width = width;
+        params.height = height;
+        params.bufferFmt = format as u32;
+
+        let status = unsafe { self.api.fptr.nvEncCreateInputBuffer?(self.encoder, &mut params) };
+        if status != _NVENCSTATUS::NV_ENC_SUCCESS { return None; }
+        else { Some(InputBuffer{ ptr: params.inputBuffer }) }
+    }
+
+    pub fn buffer_lock(&self, buffer: InputBuffer) -> Option<*mut c_void> {
+        let mut params: NV_ENC_LOCK_INPUT_BUFFER = unsafe { zeroed() };
+        params.version = NV_ENC_LOCK_INPUT_BUFFER_VER;
+        params.inputBuffer = buffer.ptr;
+
+        let status = unsafe { self.api.fptr.nvEncLockInputBuffer?(self.encoder, &mut params) };
+        if status != _NVENCSTATUS::NV_ENC_SUCCESS { return None; }
+        else { Some(params.bufferDataPtr) }
+    }
+
+    pub fn buffer_unlock(&self, buffer: InputBuffer) -> Option<()> {
+        let status = unsafe { self.api.fptr.nvEncUnlockInputBuffer?(self.encoder, buffer.ptr) };
+        if status != _NVENCSTATUS::NV_ENC_SUCCESS { return None; }
+        else { Some(()) }
+    }
+
+    pub fn alloc_output_buffer(&self) -> Option<OutputBuffer> {
+        let mut params: NV_ENC_CREATE_BITSTREAM_BUFFER = unsafe { zeroed() };
+        params.version = NV_ENC_CREATE_BITSTREAM_BUFFER_VER;
+        let status = unsafe { self.api.fptr.nvEncCreateBitstreamBuffer?(self.encoder, &mut params) };
+        if status != _NVENCSTATUS::NV_ENC_SUCCESS { return None; }
+        else { Some(OutputBuffer { ptr: params.bitstreamBuffer } )}
+    }
+
+    pub fn output_buffer_lock(&self, buffer: InputBuffer) -> Option<*mut c_void> {
+        let mut params: NV_ENC_LOCK_BITSTREAM = unsafe { zeroed() };
+        params.version = NV_ENC_LOCK_INPUT_BUFFER_VER;
+        params.outputBitstream = buffer.ptr;
+
+        let status = unsafe { self.api.fptr.nvEncLockBitstream?(self.encoder, &mut params) };
+        if status != _NVENCSTATUS::NV_ENC_SUCCESS { return None; }
+        else { Some(params.bitstreamBufferPtr) }
+    }
+
+    pub fn output_buffer_unlock(&self, buffer: InputBuffer) -> Option<()> {
+        let status = unsafe { self.api.fptr.nvEncUnlockBitstream?(self.encoder, buffer.ptr) };
+        if status != _NVENCSTATUS::NV_ENC_SUCCESS { return None; }
+        else { Some(()) }
+    }
+}
+
+pub struct OutputBuffer {
+    ptr: NV_ENC_OUTPUT_PTR,
+}
+
+/// A simple wrapper of a buffer
+pub struct InputBuffer {
+    ptr: NV_ENC_INPUT_PTR,
 }
 
 /// Preset configuration which provided by NVIDIA Video SDK
