@@ -3,6 +3,31 @@
 use nvenc_sys::*;
 use std::ffi::c_void;
 use std::mem::{uninitialized, zeroed};
+use std::fmt;
+use enum_primitive_derive::Primitive;
+use num_traits::FromPrimitive;
+
+#[derive(Primitive)]
+#[repr(u32)]
+pub enum Error {
+    Uninitialized = 0,
+    InvalidPointer = _NVENCSTATUS::NV_ENC_ERR_INVALID_PTR,
+    Unknown = std::u32::MAX,
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "An Error Occurred, Please Try Again! {}", self)
+    }
+}
+
+impl fmt::Debug for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{{ file: {}, line: {} }}", file!(), line!())
+    }
+}
+
+type Result<T> = std::result::Result<T, Error>;
 
 /// Device type used by NVDIA Video Codec SDK
 #[repr(u32)]
@@ -22,6 +47,19 @@ pub enum BufferFormat {
     ABGR = _NV_ENC_BUFFER_FORMAT::NV_ENC_BUFFER_FORMAT_ABGR,
 }
 
+macro_rules! api_call {
+    ($api:expr, $ret:expr, $($p:expr),+) => {
+        if let Some(entry) = $api {
+            let status = unsafe { entry($($p),+) };
+            if status != _NVENCSTATUS::NV_ENC_SUCCESS {
+                Err(Error::from_u32(status).unwrap_or(Error::Unknown))
+            } else {
+                Ok($ret)
+            }
+        } else { Err(Error::Uninitialized) }
+    };
+}
+
 /// Encoder session object
 pub struct Session {
     api: Api,
@@ -29,59 +67,48 @@ pub struct Session {
 }
 
 impl Session {
-    pub fn new(device_type: DeviceType, device: *mut c_void) -> Option<Self> {
+    pub fn new(device_type: DeviceType, device: *mut c_void) -> Result<Self> {
         let api = Api::init()?;
         let mut session = unsafe { NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS {
                 apiVersion: NVENCAPI_VERSION,
                 version: NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS_VER,
                 deviceType: device_type as u32,
                 device: device,
-                reserved1: uninitialized(),
-                reserved2: uninitialized(),
-                reserved: uninitialized(),
+                reserved1: zeroed(),
+                reserved2: zeroed(),
+                reserved: zeroed(),
         }};
         let mut encoder: *mut c_void = std::ptr::null_mut();
-        let status = unsafe { api.fptr.nvEncOpenEncodeSessionEx?(&mut session, &mut encoder) };
-
-        if status == _NVENCSTATUS::NV_ENC_SUCCESS {
-            Some(Self { api: api, encoder: encoder})
-        } else { None }
+        api_call!(api.fptr.nvEncOpenEncodeSessionEx, Self { api: api, encoder: encoder }, &mut session, &mut encoder)
     }
 
-    pub fn support(&self, guid: GUID) -> Option<bool> {
+    pub fn support(&self, guid: GUID) -> Result<bool> {
         let mut count = 0;
-        let status = unsafe { self.api.fptr.nvEncGetEncodeGUIDCount?(self.encoder, &mut count) };
-
-        if status != _NVENCSTATUS::NV_ENC_SUCCESS { return None; }
+        api_call!(self.api.fptr.nvEncGetEncodeGUIDCount, () ,self.encoder, &mut count)?;
 
         let mut guids = Vec::with_capacity(count as usize);
         let mut returned = 0;
-        let status = unsafe { self.api.fptr.nvEncGetEncodeGUIDs?(self.encoder,
-                guids.as_mut_ptr(), count, &mut returned) };
-
-        if status != _NVENCSTATUS::NV_ENC_SUCCESS { return None; }
+        api_call!(self.api.fptr.nvEncGetEncodeGUIDs, (), self.encoder,
+                guids.as_mut_ptr(), count, &mut returned)?;
 
         unsafe { guids.set_len(returned as usize) };
 
         println!("{:?} {}", guids, returned
         );
         for g in guids.into_iter().take(returned as usize) {
-            if guid == g { return Some(true) }
+            if guid == g { return Ok(true) }
         }
-        Some(false)
+        Ok(false)
     }
 
-    pub fn preset_config(&self, encode: GUID, preset: GUID) -> Option<PresetConfig> {
+    pub fn preset_config(&self, encode: GUID, preset: GUID) -> Result<PresetConfig> {
         let mut config: NV_ENC_PRESET_CONFIG = unsafe { uninitialized() };
         config.presetCfg.version = NV_ENC_CONFIG_VER;
         config.version = NV_ENC_PRESET_CONFIG_VER;
 
-        let status = unsafe {
-            self.api.fptr.nvEncGetEncodePresetConfig?(self.encoder, encode, preset, &mut config)
-        };
-
-        if status != _NVENCSTATUS::NV_ENC_SUCCESS { return None; }
-        Some(PresetConfig { preset: config })
+        api_call!(self.api.fptr.nvEncGetEncodePresetConfig,
+                PresetConfig { preset: config},
+                self.encoder, encode, preset, &mut config)
     }
 
     pub fn initialize(&self, init_params: &mut InitParams) -> Option<bool> {
@@ -129,20 +156,16 @@ impl Session {
         else { Some(OutputBuffer { ptr: params.bitstreamBuffer } )}
     }
 
-    pub fn output_buffer_lock(&self, buffer: InputBuffer) -> Option<*mut c_void> {
+    pub fn output_buffer_lock(&self, buffer: InputBuffer) -> Result<*mut c_void> {
         let mut params: NV_ENC_LOCK_BITSTREAM = unsafe { zeroed() };
         params.version = NV_ENC_LOCK_INPUT_BUFFER_VER;
         params.outputBitstream = buffer.ptr;
 
-        let status = unsafe { self.api.fptr.nvEncLockBitstream?(self.encoder, &mut params) };
-        if status != _NVENCSTATUS::NV_ENC_SUCCESS { return None; }
-        else { Some(params.bitstreamBufferPtr) }
+        api_call!(self.api.fptr.nvEncLockBitstream, params.bitstreamBufferPtr, self.encoder, &mut params)
     }
 
-    pub fn output_buffer_unlock(&self, buffer: InputBuffer) -> Option<()> {
-        let status = unsafe { self.api.fptr.nvEncUnlockBitstream?(self.encoder, buffer.ptr) };
-        if status != _NVENCSTATUS::NV_ENC_SUCCESS { return None; }
-        else { Some(()) }
+    pub fn output_buffer_unlock(&self, buffer: InputBuffer) -> Result<()> {
+        api_call!(self.api.fptr.nvEncUnlockBitstream, (), self.encoder, buffer.ptr)
     }
 }
 
@@ -218,14 +241,14 @@ pub struct Api {
 
 impl Api {
     /// Create a new instance of API
-    pub fn init() -> Option<Self> {
-        let mut function_list: NV_ENCODE_API_FUNCTION_LIST = unsafe {uninitialized()};
+    pub fn init() -> Result<Self> {
+        let mut function_list: NV_ENCODE_API_FUNCTION_LIST = unsafe {zeroed()};
         function_list.version = NV_ENCODE_API_FUNCTION_LIST_VER;
 
         let status = unsafe { NvEncodeAPICreateInstance(&mut function_list) };
         if status == _NVENCSTATUS::NV_ENC_SUCCESS {
-            Some(Self {fptr: function_list})
-        } else { None }
+            Ok(Self {fptr: function_list})
+        } else { Err(Error::from_u32(status).unwrap_or(Error::Unknown)) }
     }
 }
 
@@ -288,7 +311,7 @@ mod tests {
     #[test]
     fn session_create() {
         let context = init_cuda_context();
-        assert!(Session::new(DeviceType::Cuda, context as *mut c_void).is_some())
+        assert!(Session::new(DeviceType::Cuda, context as *mut c_void).is_ok())
     }
 
     #[test]
@@ -302,7 +325,7 @@ mod tests {
         let context = init_cuda_context();
         let session = Session::new(DeviceType::Cuda, context as *mut c_void).unwrap();
         let supported = session.support(h264_guid);
-        assert!(supported.is_some());
+        assert!(supported.is_ok());
         assert!(supported.unwrap())
     }
 
@@ -313,6 +336,6 @@ mod tests {
 
     #[test]
     fn api_create_instance() {
-        assert!(Api::init().is_some())
+        assert!(Api::init().is_ok())
     }
 }
