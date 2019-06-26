@@ -14,6 +14,8 @@ pub enum DeviceType {
     OpenGL = _NV_ENC_DEVICE_TYPE::NV_ENC_DEVICE_TYPE_OPENGL as isize,
 }
 
+
+/// Encoder session object
 pub struct Session {
     api: Api,
     encoder: *mut c_void,
@@ -60,6 +62,83 @@ impl Session {
             if guid == g { return Some(true) }
         }
         Some(false)
+    }
+
+    pub fn preset_config(&self, encode: GUID, preset: GUID) -> Option<PresetConfig> {
+        let mut config: NV_ENC_PRESET_CONFIG = unsafe { uninitialized() };
+        config.presetCfg.version = NV_ENC_CONFIG_VER;
+        config.version = NV_ENC_PRESET_CONFIG_VER;
+
+        let status = unsafe {
+            self.api.fptr.nvEncGetEncodePresetConfig?(self.encoder, encode, preset, &mut config)
+        };
+
+        if status != _NVENCSTATUS::NV_ENC_SUCCESS { return None; }
+        Some(PresetConfig { preset: config })
+    }
+
+    pub fn initialize(&self, init_params: &mut InitParams) -> Option<bool> {
+        let mut params = init_params.init_params;
+        let status = unsafe { self.api.fptr.nvEncInitializeEncoder?(self.encoder, &mut params) };
+
+        if status != _NVENCSTATUS::NV_ENC_SUCCESS { return Some(false) }
+        else { Some(true) }
+    }
+}
+
+/// Preset configuration which provided by NVIDIA Video SDK
+pub struct PresetConfig {
+    preset: NV_ENC_PRESET_CONFIG,
+}
+
+/// Parameters used to initialize the encoder
+pub struct InitParams {
+    init_params: NV_ENC_INITIALIZE_PARAMS,
+}
+
+struct InitParamsBuilder(InitParams);
+
+impl InitParamsBuilder {
+    pub fn new(encode: GUID) -> Self {
+        let mut init = InitParams{ init_params: unsafe { std::mem::zeroed() } };
+        init.init_params.encodeGUID = encode;
+        Self(init)
+    }
+
+    pub fn width(mut self, width: u32) -> Self {
+        self.0.init_params.encodeWidth = width;
+        self
+    }
+
+    pub fn height(mut self, height : u32) -> Self {
+        self.0.init_params.encodeHeight = height;
+        self
+    }
+
+    pub fn preset_guid(mut self, preset: GUID) -> Self {
+        self.0.init_params.presetGUID = preset;
+        self
+    }
+
+    pub fn preset_config(mut self, mut preset: PresetConfig) -> Self {
+        let config = &mut preset.preset.presetCfg;
+        self.0.init_params.encodeConfig = config;
+        self
+    }
+
+    pub fn framerate(mut self, num: u32, den: u32) -> Self {
+        self.0.init_params.frameRateNum = num;
+        self.0.init_params.frameRateDen = den;
+        self
+    }
+
+    pub fn ptd(mut self, enable: bool) -> Self {
+        self.0.init_params.enablePTD = enable as u32;
+        self
+    }
+
+    pub fn build(self) -> InitParams {
+        self.0
     }
 }
 
