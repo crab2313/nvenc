@@ -107,7 +107,7 @@ mod tests {
     fn init_cuda_context() -> cuda::CUcontext {
         unsafe {
             let ret = cuda::cuInit(0);
-            assert_eq!(ret, cuda::CUDA_SUCCESS);
+            assert_eq!(ret, cuda::CUDA_SUCCESS, "failed to init cuda");
             let mut count: i32 = 0;
             let ret = cuda::cuDeviceGetCount(&mut count as *mut i32);
             assert_eq!(ret, cuda::CUDA_SUCCESS);
@@ -137,7 +137,7 @@ mod tests {
         }
     }
 
-    // #[test]
+    #[test]
     fn session_create() {
         let context = init_cuda_context();
         assert!(Session::new(DeviceType::Cuda, context as *mut c_void).is_some())
