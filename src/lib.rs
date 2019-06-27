@@ -62,12 +62,12 @@ macro_rules! api_call {
 }
 
 /// Encoder session object
-pub struct Session {
+pub struct Encoder {
     api: Api,
     encoder: *mut c_void,
 }
 
-impl Session {
+impl Encoder {
     pub fn new(device_type: DeviceType, device: *mut c_void) -> Result<Self> {
         let api = Api::init()?;
         let mut session = unsafe { NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS {
@@ -339,7 +339,7 @@ mod tests {
     #[test]
     fn session_create() {
         let context = init_cuda_context();
-        assert!(Session::new(DeviceType::Cuda, context as *mut c_void).is_ok())
+        assert!(Encoder::new(DeviceType::Cuda, context as *mut c_void).is_ok())
     }
 
     #[test]
@@ -351,7 +351,7 @@ mod tests {
             Data4: [ 0xaa, 0x85, 0x1e, 0x50, 0xf3, 0x21, 0xf6, 0xbf]
         };
         let context = init_cuda_context();
-        let session = Session::new(DeviceType::Cuda, context as *mut c_void).unwrap();
+        let session = Encoder::new(DeviceType::Cuda, context as *mut c_void).unwrap();
         let supported = session.support(h264_guid);
         assert!(supported.is_ok());
         assert!(supported.unwrap())
