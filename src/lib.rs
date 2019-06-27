@@ -188,7 +188,7 @@ pub struct InitParams {
     init_params: NV_ENC_INITIALIZE_PARAMS,
 }
 
-struct InitParamsBuilder(InitParams);
+pub struct InitParamsBuilder(InitParams);
 
 impl InitParamsBuilder {
     pub fn new(encode: GUID) -> Self {
