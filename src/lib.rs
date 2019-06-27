@@ -6,7 +6,7 @@ use std::mem::zeroed;
 use std::fmt;
 use enum_primitive_derive::Primitive;
 use num_traits::FromPrimitive;
-use log::{error, info};
+use log::{error, debug};
 
 #[derive(Primitive)]
 #[repr(u32)]
@@ -71,17 +71,15 @@ pub struct Encoder {
 impl Encoder {
     pub fn new(device_type: DeviceType, device: *mut c_void) -> Result<Self> {
         let api = Api::init()?;
-        let mut session = unsafe { NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS {
-                apiVersion: NVENCAPI_VERSION,
-                version: NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS_VER,
-                deviceType: device_type as u32,
-                device: device,
-                reserved1: zeroed(),
-                reserved2: zeroed(),
-                reserved: zeroed(),
-        }};
+        let mut params: NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS = unsafe{zeroed()};
+        params.version = NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS_VER;
+        params.apiVersion = NVENCAPI_VERSION;
+        params.deviceType = device_type as u32;
+        params.device = device;
         let mut encoder: *mut c_void = std::ptr::null_mut();
-        api_call!(api.fptr.nvEncOpenEncodeSessionEx, Self { api: api, encoder: encoder }, &mut session, &mut encoder)
+        api_call!(api.fptr.nvEncOpenEncodeSessionEx,
+                Self { api: api, encoder: encoder },
+                &mut params, &mut encoder)
     }
 
     pub fn support(&self, guid: GUID) -> Result<bool> {
@@ -95,8 +93,6 @@ impl Encoder {
 
         unsafe { guids.set_len(returned as usize) };
 
-        println!("{:?} {}", guids, returned
-        );
         for g in guids.into_iter().take(returned as usize) {
             if guid == g { return Ok(true) }
         }
