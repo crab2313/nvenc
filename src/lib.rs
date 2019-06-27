@@ -6,6 +6,7 @@ use std::mem::{uninitialized, zeroed};
 use std::fmt;
 use enum_primitive_derive::Primitive;
 use num_traits::FromPrimitive;
+use log::{error, info};
 
 #[derive(Primitive)]
 #[repr(u32)]
@@ -191,6 +192,15 @@ impl Encoder {
         params.outputBitstream = output.ptr;
 
         api_call!(self.api.fptr.nvEncEncodePicture, (), self.encoder, &mut params)
+    }
+}
+
+impl Drop for Encoder {
+    fn drop(&mut self) {
+        match api_call!(self.api.fptr.nvEncDestroyEncoder, (), self.encoder) {
+            Ok(()) => (),
+            Err(err) => error!("failed to destroy the encoder: {}", err)
+        }
     }
 }
 

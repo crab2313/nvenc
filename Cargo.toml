@@ -8,6 +8,7 @@ edition = "2018"
 nvenc-sys = { git = "https://github.com/crab2313/nvenc-sys.git" }
 enum-primitive-derive = "0.1"
 num-traits = "0.1"
+log = "0.4"
 
 [dev-dependencies]
 cuda = { version = "0.4.0-pre", features = ["cuda_10_1"] }
