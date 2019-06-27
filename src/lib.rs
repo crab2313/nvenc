@@ -2,7 +2,7 @@
 
 use nvenc_sys::*;
 use std::ffi::c_void;
-use std::mem::{uninitialized, zeroed};
+use std::mem::zeroed;
 use std::fmt;
 use enum_primitive_derive::Primitive;
 use num_traits::FromPrimitive;
@@ -104,7 +104,7 @@ impl Encoder {
     }
 
     pub fn preset_config(&self, encode: GUID, preset: GUID) -> Result<PresetConfig> {
-        let mut config: NV_ENC_PRESET_CONFIG = unsafe { uninitialized() };
+        let mut config: NV_ENC_PRESET_CONFIG = unsafe { zeroed() };
         config.presetCfg.version = NV_ENC_CONFIG_VER;
         config.version = NV_ENC_PRESET_CONFIG_VER;
 
@@ -323,7 +323,7 @@ mod tests {
 
             println!("found {} cuda capable devices", count);
 
-            let mut device: cuda::CUdevice = uninitialized();
+            let mut device: cuda::CUdevice = zeroed();
 
             let ret = cuda::cuDeviceGet(&mut device, 0);
             assert_eq!(ret, cuda::CUDA_SUCCESS);
@@ -338,7 +338,7 @@ mod tests {
 
             println!("device name: {:?}", cs);
 
-            let mut context: cuda::CUcontext = uninitialized();
+            let mut context: cuda::CUcontext = zeroed();
 
             let ret = cuda::cuCtxCreate_v2(&mut context, 0, device);
             assert_eq!(ret, cuda::CUDA_SUCCESS);
