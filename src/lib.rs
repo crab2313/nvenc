@@ -42,6 +42,7 @@ pub enum DeviceType {
 
 /// Data format of input and output buffer
 #[repr(u32)]
+#[derive(Copy, Clone)]
 pub enum BufferFormat {
     ARGB = _NV_ENC_BUFFER_FORMAT::NV_ENC_BUFFER_FORMAT_ARGB,
     ABGR = _NV_ENC_BUFFER_FORMAT::NV_ENC_BUFFER_FORMAT_ABGR,
@@ -120,40 +121,49 @@ impl Session {
     }
 
     /// Allocate a new buffer managed by NVIDIA Video SDK
-    pub fn alloc_buffer(&self, width: u32, height: u32, format: BufferFormat) -> Option<InputBuffer> {
+    pub fn alloc_input_buffer(&self,
+        width: u32,
+        height: u32,
+        format: BufferFormat
+    ) -> Result<InputBuffer> {
         let mut params: NV_ENC_CREATE_INPUT_BUFFER = unsafe { zeroed() };
         params.version = NV_ENC_CREATE_INPUT_BUFFER_VER;
         params.width = width;
         params.height = height;
         params.bufferFmt = format as u32;
 
-        let status = unsafe { self.api.fptr.nvEncCreateInputBuffer?(self.encoder, &mut params) };
-        if status != _NVENCSTATUS::NV_ENC_SUCCESS { return None; }
-        else { Some(InputBuffer{ ptr: params.inputBuffer }) }
+        api_call!(self.api.fptr.nvEncCreateInputBuffer,
+                InputBuffer{
+                    ptr: params.inputBuffer,
+                    format: format,
+                    width: width,
+                    height: height
+                }, self.encoder, &mut params)
     }
 
-    pub fn buffer_lock(&self, buffer: InputBuffer) -> Option<*mut c_void> {
+    pub fn input_buffer_lock(&self,
+        buffer: InputBuffer
+    ) -> Result<*mut c_void> {
         let mut params: NV_ENC_LOCK_INPUT_BUFFER = unsafe { zeroed() };
         params.version = NV_ENC_LOCK_INPUT_BUFFER_VER;
         params.inputBuffer = buffer.ptr;
 
-        let status = unsafe { self.api.fptr.nvEncLockInputBuffer?(self.encoder, &mut params) };
-        if status != _NVENCSTATUS::NV_ENC_SUCCESS { return None; }
-        else { Some(params.bufferDataPtr) }
+        api_call!(self.api.fptr.nvEncLockInputBuffer,
+                params.bufferDataPtr,
+                self.encoder, &mut params)
     }
 
-    pub fn buffer_unlock(&self, buffer: InputBuffer) -> Option<()> {
-        let status = unsafe { self.api.fptr.nvEncUnlockInputBuffer?(self.encoder, buffer.ptr) };
-        if status != _NVENCSTATUS::NV_ENC_SUCCESS { return None; }
-        else { Some(()) }
+    pub fn input_buffer_unlock(&self, buffer: InputBuffer) -> Result<()> {
+        api_call!(self.api.fptr.nvEncUnlockInputBuffer, (), self.encoder, buffer.ptr)
     }
 
-    pub fn alloc_output_buffer(&self) -> Option<OutputBuffer> {
+    pub fn alloc_output_buffer(&self) -> Result<OutputBuffer> {
         let mut params: NV_ENC_CREATE_BITSTREAM_BUFFER = unsafe { zeroed() };
         params.version = NV_ENC_CREATE_BITSTREAM_BUFFER_VER;
-        let status = unsafe { self.api.fptr.nvEncCreateBitstreamBuffer?(self.encoder, &mut params) };
-        if status != _NVENCSTATUS::NV_ENC_SUCCESS { return None; }
-        else { Some(OutputBuffer { ptr: params.bitstreamBuffer } )}
+        api_call!(self.api.fptr.nvEncCreateBitstreamBuffer,
+                OutputBuffer {
+                    ptr: params.bitstreamBufferPtr
+                }, self.encoder, &mut params)
     }
 
     pub fn output_buffer_lock(&self, buffer: InputBuffer) -> Result<*mut c_void> {
@@ -167,6 +177,21 @@ impl Session {
     pub fn output_buffer_unlock(&self, buffer: InputBuffer) -> Result<()> {
         api_call!(self.api.fptr.nvEncUnlockBitstream, (), self.encoder, buffer.ptr)
     }
+
+    /// Main entry to encode a video frame
+    pub fn encode(&self, input: InputBuffer, output: OutputBuffer) -> Result<()> {
+        let mut params: NV_ENC_PIC_PARAMS = unsafe { zeroed() };
+        params.version = NV_ENC_PIC_PARAMS_VER;
+        params.inputBuffer = input.ptr;
+        params.bufferFmt = input.format as u32;
+        params.inputWidth = input.width;
+        params.inputHeight = input.height;
+        params.inputPitch = input.width;
+        params.pictureStruct = _NV_ENC_PIC_STRUCT::NV_ENC_PIC_STRUCT_FRAME;
+        params.outputBitstream = output.ptr;
+
+        api_call!(self.api.fptr.nvEncEncodePicture, (), self.encoder, &mut params)
+    }
 }
 
 pub struct OutputBuffer {
@@ -176,6 +201,9 @@ pub struct OutputBuffer {
 /// A simple wrapper of a buffer
 pub struct InputBuffer {
     ptr: NV_ENC_INPUT_PTR,
+    format: BufferFormat,
+    width: u32,
+    height: u32,
 }
 
 /// Preset configuration which provided by NVIDIA Video SDK
