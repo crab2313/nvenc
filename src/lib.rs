@@ -289,13 +289,13 @@ pub struct Version {
 }
 
 /// Returns the maximum version of the runtime driver
-pub fn max_version_supported() -> Option<Version> {
+pub fn max_version_supported() -> Result<Version> {
     let mut value: u32 = 0;
-    let ret = unsafe { NvEncodeAPIGetMaxSupportedVersion(&mut value) };
+    let status = unsafe { NvEncodeAPIGetMaxSupportedVersion(&mut value) };
 
-    if ret == _NVENCSTATUS::NV_ENC_SUCCESS {
-        Some(Version { major: value & 0xf, minor: value >> 4})
-    } else { None }
+    if status == _NVENCSTATUS::NV_ENC_SUCCESS {
+        Ok(Version { major: value & 0xf, minor: value >> 4})
+    } else { Err(Error::from_u32(status).unwrap_or(Error::Unknown)) }
 }
 
 #[cfg(test)]
@@ -359,7 +359,7 @@ mod tests {
 
     #[test]
     fn version_check() {
-        assert!(max_version_supported().is_some())
+        assert!(max_version_supported().is_ok())
     }
 
     #[test]
