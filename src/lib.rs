@@ -144,7 +144,7 @@ impl Encoder {
     }
 
     pub fn input_buffer_lock(&self,
-        buffer: InputBuffer
+        buffer: &InputBuffer
     ) -> Result<*mut c_void> {
         let mut params: NV_ENC_LOCK_INPUT_BUFFER = unsafe { zeroed() };
         params.version = NV_ENC_LOCK_INPUT_BUFFER_VER;
@@ -155,7 +155,7 @@ impl Encoder {
                 self.encoder, &mut params)
     }
 
-    pub fn input_buffer_unlock(&self, buffer: InputBuffer) -> Result<()> {
+    pub fn input_buffer_unlock(&self, buffer: &InputBuffer) -> Result<()> {
         api_call!(self.api.fptr.nvEncUnlockInputBuffer, (), self.encoder, buffer.ptr)
     }
 
@@ -168,7 +168,7 @@ impl Encoder {
                 }, self.encoder, &mut params)
     }
 
-    pub fn output_buffer_lock(&self, buffer: InputBuffer) -> Result<*mut c_void> {
+    pub fn output_buffer_lock(&self, buffer: &InputBuffer) -> Result<*mut c_void> {
         let mut params: NV_ENC_LOCK_BITSTREAM = unsafe { zeroed() };
         params.version = NV_ENC_LOCK_INPUT_BUFFER_VER;
         params.outputBitstream = buffer.ptr;
@@ -176,7 +176,7 @@ impl Encoder {
         api_call!(self.api.fptr.nvEncLockBitstream, params.bitstreamBufferPtr, self.encoder, &mut params)
     }
 
-    pub fn output_buffer_unlock(&self, buffer: InputBuffer) -> Result<()> {
+    pub fn output_buffer_unlock(&self, buffer: &InputBuffer) -> Result<()> {
         api_call!(self.api.fptr.nvEncUnlockBitstream, (), self.encoder, buffer.ptr)
     }
 
