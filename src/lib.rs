@@ -10,23 +10,24 @@ use log::{error, debug};
 
 pub use nvenc_sys::GUID;
 
-#[derive(Primitive)]
+#[derive(Primitive, Copy, Clone, Debug)]
 #[repr(u32)]
 pub enum Error {
     Uninitialized = 0,
     InvalidPointer = _NVENCSTATUS::NV_ENC_ERR_INVALID_PTR,
+    InvalidEncodeDevice = _NVENCSTATUS::NV_ENC_ERR_INVALID_ENCODERDEVICE,
+    DeviceNotExist = _NVENCSTATUS::NV_ENC_ERR_DEVICE_NOT_EXIST,
+    UnsupportedParam = _NVENCSTATUS::NV_ENC_ERR_UNSUPPORTED_PARAM,
+    OutOfMemory = _NVENCSTATUS::NV_ENC_ERR_OUT_OF_MEMORY,
+    InvalidParam = _NVENCSTATUS::NV_ENC_ERR_INVALID_PARAM,
+    InvalidVersion = _NVENCSTATUS::NV_ENC_ERR_INVALID_VERSION,
+    Generic = _NVENCSTATUS::NV_ENC_ERR_GENERIC,
     Unknown = std::u32::MAX,
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "An Error Occurred, Please Try Again! {}", self)
-    }
-}
-
-impl fmt::Debug for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{{ file: {}, line: {} }}", file!(), line!())
     }
 }
 
