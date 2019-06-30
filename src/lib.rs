@@ -232,6 +232,7 @@ pub struct InitParamsBuilder(InitParams);
 impl InitParamsBuilder {
     pub fn new(encode: GUID) -> Self {
         let mut init = InitParams{ init_params: unsafe { std::mem::zeroed() } };
+        init.init_params.version = NV_ENC_INITIALIZE_PARAMS_VER;
         init.init_params.encodeGUID = encode;
         Self(init)
     }
