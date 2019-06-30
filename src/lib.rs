@@ -46,10 +46,21 @@ pub enum DeviceType {
 
 /// Data format of input and output buffer
 #[repr(u32)]
-#[derive(Copy, Clone, Debug)]
+#[derive(Primitive, Copy, Clone, Debug)]
 pub enum BufferFormat {
+    Undefined = _NV_ENC_BUFFER_FORMAT::NV_ENC_BUFFER_FORMAT_UNDEFINED,
+    NV12 = _NV_ENC_BUFFER_FORMAT::NV_ENC_BUFFER_FORMAT_NV12,
+    YV12 = _NV_ENC_BUFFER_FORMAT::NV_ENC_BUFFER_FORMAT_YV12,
+    IYUV = _NV_ENC_BUFFER_FORMAT::NV_ENC_BUFFER_FORMAT_IYUV,
+    YUV444 = _NV_ENC_BUFFER_FORMAT::NV_ENC_BUFFER_FORMAT_YUV444,
+    YUV444_10Bit = _NV_ENC_BUFFER_FORMAT::NV_ENC_BUFFER_FORMAT_YUV444_10BIT,
+    YUV420_10Bit = _NV_ENC_BUFFER_FORMAT::NV_ENC_BUFFER_FORMAT_YUV420_10BIT,
     ARGB = _NV_ENC_BUFFER_FORMAT::NV_ENC_BUFFER_FORMAT_ARGB,
+    ARGB10 = _NV_ENC_BUFFER_FORMAT::NV_ENC_BUFFER_FORMAT_ARGB10,
     ABGR = _NV_ENC_BUFFER_FORMAT::NV_ENC_BUFFER_FORMAT_ABGR,
+    AYUV = _NV_ENC_BUFFER_FORMAT::NV_ENC_BUFFER_FORMAT_AYUV,
+    ABGR10 = _NV_ENC_BUFFER_FORMAT::NV_ENC_BUFFER_FORMAT_ABGR10,
+    U8 = _NV_ENC_BUFFER_FORMAT::NV_ENC_BUFFER_FORMAT_U8,
 }
 
 macro_rules! api_call {
@@ -85,7 +96,7 @@ impl Encoder {
                 &mut params, &mut encoder)
     }
 
-    pub fn support(&self, guid: GUID) -> Result<bool> {
+    pub fn support_codec(&self, guid: GUID) -> Result<bool> {
         let mut count = 0;
         api_call!(self.api.fptr.nvEncGetEncodeGUIDCount, () ,self.encoder, &mut count)?;
 
@@ -100,6 +111,32 @@ impl Encoder {
             if guid == g { return Ok(true) }
         }
         Ok(false)
+    }
+
+    pub fn supported_presets(&self, encode: GUID) -> Result<Vec<GUID>> {
+        let mut count = 0;
+        api_call!(self.api.fptr.nvEncGetEncodePresetCount, (), self.encoder, encode, &mut count)?;
+
+        let mut guids = Vec::with_capacity(count as usize);
+        let mut returned = 0;
+        api_call!(self.api.fptr.nvEncGetEncodePresetGUIDs, (), self.encoder,
+                encode, guids.as_mut_ptr(), count, &mut returned)?;
+        assert!(returned <= count);
+        unsafe { guids.set_len(returned as usize) };
+        Ok(guids)
+    }
+
+    pub fn supported_formats(&self, encode: GUID) -> Result<Vec<BufferFormat>> {
+        let mut count = 0;
+        api_call!(self.api.fptr.nvEncGetInputFormatCount, (), self.encoder, encode, &mut count)?;
+
+        let mut formats = Vec::with_capacity(count as usize);
+        let mut returned = 0;
+        api_call!(self.api.fptr.nvEncGetInputFormats, (), self.encoder,
+                encode, formats.as_mut_ptr(), count, &mut returned)?;
+        assert!(returned <= count);
+        unsafe { formats.set_len(returned as usize) };
+        Ok(formats.into_iter().map(|f| BufferFormat::from_u32(f).unwrap_or(BufferFormat::Undefined)).collect())
     }
 
     pub fn preset_config(&self, encode: GUID, preset: GUID) -> Result<PresetConfig> {
@@ -191,7 +228,6 @@ impl Encoder {
         params.inputWidth = input.width;
         params.inputHeight = input.height;
         params.inputPitch = input.width;
-
         params.outputBitstream = output.ptr;
 
         api_call!(self.api.fptr.nvEncEncodePicture, (), self.encoder, &mut params)
@@ -366,7 +402,7 @@ mod tests {
         };
         let context = init_cuda_context();
         let session = Encoder::new(DeviceType::Cuda, context as *mut c_void).unwrap();
-        let supported = session.support(h264_guid);
+        let supported = session.support_codec(h264_guid);
         assert!(supported.is_ok());
         assert!(supported.unwrap())
     }
