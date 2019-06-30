@@ -46,7 +46,7 @@ pub enum DeviceType {
 
 /// Data format of input and output buffer
 #[repr(u32)]
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum BufferFormat {
     ARGB = _NV_ENC_BUFFER_FORMAT::NV_ENC_BUFFER_FORMAT_ARGB,
     ABGR = _NV_ENC_BUFFER_FORMAT::NV_ENC_BUFFER_FORMAT_ABGR,
@@ -145,13 +145,15 @@ impl Encoder {
 
     pub fn input_buffer_lock(&self,
         buffer: &InputBuffer
-    ) -> Result<*mut c_void> {
+    ) -> Result<&mut [u32]> {
         let mut params: NV_ENC_LOCK_INPUT_BUFFER = unsafe { zeroed() };
         params.version = NV_ENC_LOCK_INPUT_BUFFER_VER;
         params.inputBuffer = buffer.ptr;
 
         api_call!(self.api.fptr.nvEncLockInputBuffer,
-                params.bufferDataPtr,
+                unsafe {std::slice::from_raw_parts_mut(
+                    params.bufferDataPtr as *mut u32,
+                    (buffer.width * buffer.height) as usize) },
                 self.encoder, &mut params)
     }
 
@@ -189,7 +191,7 @@ impl Encoder {
         params.inputWidth = input.width;
         params.inputHeight = input.height;
         params.inputPitch = input.width;
-        params.pictureStruct = _NV_ENC_PIC_STRUCT::NV_ENC_PIC_STRUCT_FRAME;
+
         params.outputBitstream = output.ptr;
 
         api_call!(self.api.fptr.nvEncEncodePicture, (), self.encoder, &mut params)
