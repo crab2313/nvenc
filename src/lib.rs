@@ -8,6 +8,8 @@ use enum_primitive_derive::Primitive;
 use num_traits::FromPrimitive;
 use log::{error, debug};
 
+pub use nvenc_sys::GUID;
+
 #[derive(Primitive)]
 #[repr(u32)]
 pub enum Error {
@@ -109,12 +111,14 @@ impl Encoder {
                 self.encoder, encode, preset, &mut config)
     }
 
-    pub fn initialize(&self, init_params: &mut InitParams) -> Option<bool> {
-        let mut params = init_params.init_params;
-        let status = unsafe { self.api.fptr.nvEncInitializeEncoder?(self.encoder, &mut params) };
+    pub fn initialize(&self, init_params: &InitParams) -> Result<()> {
+        // We can safely assume the params won't be changed by the API
+        // according to the API documentation
+        let params = init_params.init_params;
+        let params = &params as *const NV_ENC_INITIALIZE_PARAMS;
+        let params = params as *mut NV_ENC_INITIALIZE_PARAMS;
 
-        if status != _NVENCSTATUS::NV_ENC_SUCCESS { return Some(false) }
-        else { Some(true) }
+        api_call!(self.api.fptr.nvEncInitializeEncoder, (), self.encoder, params)
     }
 
     /// Allocate a new buffer managed by NVIDIA Video SDK
