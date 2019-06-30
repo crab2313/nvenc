@@ -285,6 +285,26 @@ impl InitParamsBuilder {
         self
     }
 
+    pub fn dar_width(mut self ,width: u32) -> Self {
+        self.0.init_params.darWidth = width;
+        self
+    }
+
+    pub fn dar_height(mut self, height: u32) -> Self {
+        self.0.init_params.darHeight = height;
+        self
+    }
+
+    pub fn max_width(mut self, width: u32) -> Self {
+        self.0.init_params.maxEncodeWidth = width;
+        self
+    }
+
+    pub fn max_height(mut self, height: u32) -> Self {
+        self.0.init_params.maxEncodeHeight = height;
+        self
+    }
+
     pub fn preset_guid(mut self, preset: GUID) -> Self {
         self.0.init_params.presetGUID = preset;
         self
