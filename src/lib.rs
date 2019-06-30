@@ -300,7 +300,7 @@ pub fn max_version_supported() -> Result<Version> {
     let status = unsafe { NvEncodeAPIGetMaxSupportedVersion(&mut value) };
 
     if status == _NVENCSTATUS::NV_ENC_SUCCESS {
-        Ok(Version { major: value & 0xf, minor: value >> 4})
+        Ok(Version { major: value >> 4, minor: value & 0xf })
     } else { Err(Error::from_u32(status).unwrap_or(Error::Unknown)) }
 }
 
