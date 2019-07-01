@@ -203,7 +203,7 @@ impl Encoder {
         params.version = NV_ENC_CREATE_BITSTREAM_BUFFER_VER;
         api_call!(self.api.fptr.nvEncCreateBitstreamBuffer,
                 OutputBuffer {
-                    ptr: params.bitstreamBufferPtr
+                    ptr: params.bitstreamBuffer
                 }, self.encoder, &mut params)
     }
 
@@ -243,11 +243,13 @@ impl Drop for Encoder {
     }
 }
 
+#[derive(Debug)]
 pub struct OutputBuffer {
     ptr: NV_ENC_OUTPUT_PTR,
 }
 
 /// A simple wrapper of a buffer
+#[derive(Debug)]
 pub struct InputBuffer {
     ptr: NV_ENC_INPUT_PTR,
     format: BufferFormat,
