@@ -9,6 +9,7 @@ use num_traits::FromPrimitive;
 use log::{error, debug};
 
 pub use nvenc_sys::GUID;
+pub use nvenc_sys:: guids as guids;
 
 #[derive(Primitive, Copy, Clone, Debug)]
 #[repr(u32)]
@@ -207,20 +208,24 @@ impl Encoder {
                 }, self.encoder, &mut params)
     }
 
-    pub fn output_buffer_lock(&self, buffer: &InputBuffer) -> Result<*mut c_void> {
+    pub fn output_buffer_lock(&self, buffer: &OutputBuffer) -> Result<&[u8]> {
         let mut params: NV_ENC_LOCK_BITSTREAM = unsafe { zeroed() };
         params.version = NV_ENC_LOCK_INPUT_BUFFER_VER;
         params.outputBitstream = buffer.ptr;
 
-        api_call!(self.api.fptr.nvEncLockBitstream, params.bitstreamBufferPtr, self.encoder, &mut params)
+        api_call!(self.api.fptr.nvEncLockBitstream,
+            unsafe { std::slice::from_raw_parts(
+                            params.bitstreamBufferPtr as *mut u8,
+                            params.bitstreamSizeInBytes as usize) },
+            self.encoder, &mut params)
     }
 
-    pub fn output_buffer_unlock(&self, buffer: &InputBuffer) -> Result<()> {
+    pub fn output_buffer_unlock(&self, buffer: &OutputBuffer) -> Result<()> {
         api_call!(self.api.fptr.nvEncUnlockBitstream, (), self.encoder, buffer.ptr)
     }
 
     /// Main entry to encode a video frame
-    pub fn encode(&self, input: InputBuffer, output: OutputBuffer) -> Result<()> {
+    pub fn encode(&self, input: &InputBuffer, output: &OutputBuffer) -> Result<()> {
         let mut params: NV_ENC_PIC_PARAMS = unsafe { zeroed() };
         params.version = NV_ENC_PIC_PARAMS_VER;
         params.inputBuffer = input.ptr;
