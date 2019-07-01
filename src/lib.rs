@@ -228,6 +228,7 @@ impl Encoder {
         params.inputWidth = input.width;
         params.inputHeight = input.height;
         params.inputPitch = input.width;
+        params.pictureStruct = _NV_ENC_PIC_STRUCT::NV_ENC_PIC_STRUCT_FRAME;
         params.outputBitstream = output.ptr;
 
         api_call!(self.api.fptr.nvEncEncodePicture, (), self.encoder, &mut params)
