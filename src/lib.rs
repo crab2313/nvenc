@@ -140,13 +140,13 @@ impl Encoder {
         Ok(formats.into_iter().map(|f| BufferFormat::from_u32(f).unwrap_or(BufferFormat::Undefined)).collect())
     }
 
-    pub fn preset_config(&self, encode: GUID, preset: GUID) -> Result<PresetConfig> {
+    pub fn preset_config(&self, encode: GUID, preset: GUID) -> Result<EncodeConfig> {
         let mut config: NV_ENC_PRESET_CONFIG = unsafe { zeroed() };
         config.presetCfg.version = NV_ENC_CONFIG_VER;
         config.version = NV_ENC_PRESET_CONFIG_VER;
 
         api_call!(self.api.fptr.nvEncGetEncodePresetConfig,
-                PresetConfig { preset: config},
+                EncodeConfig { config: config.presetCfg },
                 self.encoder, encode, preset, &mut config)
     }
 
@@ -263,9 +263,31 @@ pub struct InputBuffer {
     height: u32,
 }
 
-/// Preset configuration which provided by NVIDIA Video SDK
-pub struct PresetConfig {
-    preset: NV_ENC_PRESET_CONFIG,
+/// Encoder configuration for a encode session
+pub struct EncodeConfig {
+    config: NV_ENC_CONFIG,
+}
+
+impl EncodeConfig {
+    pub fn profile(&self) -> GUID {
+        self.config.profileGUID
+    }
+
+    pub fn gop_length(&self) -> u32 {
+        self.config.gopLength
+    }
+
+    pub fn frame_interval_p(&self) -> i32 {
+        self.config.frameIntervalP
+    }
+
+    pub fn rate_control_mode(&self) -> u32 {
+        self.config.rcParams.rateControlMode
+    }
+
+    pub fn average_bit_rate(&self) -> u32 {
+        self.config.rcParams.averageBitRate
+    }
 }
 
 /// Parameters used to initialize the encoder
@@ -318,8 +340,8 @@ impl InitParamsBuilder {
         self
     }
 
-    pub fn preset_config(mut self, mut preset: PresetConfig) -> Self {
-        let config = &mut preset.preset.presetCfg;
+    pub fn preset_config(mut self, mut config: EncodeConfig) -> Self {
+        let config = &mut config.config;
         self.0.init_params.encodeConfig = config;
         self
     }
@@ -422,12 +444,7 @@ mod tests {
 
     #[test]
     fn h264() {
-        let h264_guid = GUID {
-            Data1: 0x6bc82762,
-            Data2: 0x4e63,
-            Data3: 0x4ca4,
-            Data4: [ 0xaa, 0x85, 0x1e, 0x50, 0xf3, 0x21, 0xf6, 0xbf]
-        };
+        let h264_guid = guids::NV_ENC_CODEC_H264_GUID;
         let context = init_cuda_context();
         let session = Encoder::new(DeviceType::Cuda, context as *mut c_void).unwrap();
         let supported = session.support_codec(h264_guid);
